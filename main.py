@@ -162,110 +162,112 @@ def faceThread():
     print("Face detection models loaded. Starting processing")
     while ret:
         processFrameID = frame_ID
-        data['Faces'] = []
-        frame = latest_camera_frame
-        # ret, frame = camera.read()
-        detected = False
-        EulerStr = {}
-        # Getting Euler angle
-        if ret:
-            detected = True
-            face_rects = detector(frame, 0)
-            if len(face_rects) > 0:
-                shape = predictor(frame, face_rects[0])
-                shape = face_utils.shape_to_np(shape)
-                reprojectdst, euler_angle = get_head_pose(shape)
-                X = str(euler_angle[0])
-                Y = str(euler_angle[1])
-                Z = str(euler_angle[2])
+        if not processFrameID % 15:
+            data['Faces'] = []
+            frame = latest_camera_frame
 
-                EulerStr = {
-                    "X": str(X),
-                    "Y": str(Y),
-                    "Z": str(Z)
-                }
+            # ret, frame = camera.read()
+            detected = False
+            EulerStr = {}
+            # Getting Euler angle
+            if ret:
+                detected = True
+                face_rects = detector(frame, 0)
+                if len(face_rects) > 0:
+                    shape = predictor(frame, face_rects[0])
+                    shape = face_utils.shape_to_np(shape)
+                    reprojectdst, euler_angle = get_head_pose(shape)
+                    X = str(euler_angle[0])
+                    Y = str(euler_angle[1])
+                    Z = str(euler_angle[2])
 
-        # reading the frame
-        frame = imutils.resize(frame, width=300)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_detection.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),
-                                                flags=cv2.CASCADE_SCALE_IMAGE)
+                    EulerStr = {
+                        "X": str(X),
+                        "Y": str(Y),
+                        "Z": str(Z)
+                    }
 
-        canvas = np.zeros((250, 300, 3), dtype="uint8")
-        frameClone = frame.copy()
-        if len(faces) > 0:
-            detected = True
-            faces = sorted(faces, reverse=True,
-                           key=lambda x: (x[2] - x[0]) * (x[3] - x[1]))[0]
-            (fX, fY, fW, fH) = faces
+            # reading the frame
+            frame = imutils.resize(frame, width=300)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_detection.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30),
+                                                    flags=cv2.CASCADE_SCALE_IMAGE)
 
-            # Extract the ROI of the face from the grayscale image, resize it to a fixed 28x28 pixels, and then prepare
-            # the ROI for classification via the CNN
-            roi = gray[fY:fY + fH, fX:fX + fW]
-            roi = cv2.resize(roi, (64, 64))
-            roi = roi.astype("float") / 255.0
-            roi = img_to_array(roi)
-            roi = np.expand_dims(roi, axis=0)
+            canvas = np.zeros((250, 300, 3), dtype="uint8")
+            frameClone = frame.copy()
+            if len(faces) > 0:
+                detected = True
+                faces = sorted(faces, reverse=True,
+                               key=lambda x: (x[2] - x[0]) * (x[3] - x[1]))[0]
+                (fX, fY, fW, fH) = faces
 
-            preds = emotion_classifier.predict(roi)[0]
-            emotion_probability = np.max(preds)
-            label = EMOTIONS[preds.argmax()]
-        else:
-            continue
+                # Extract the ROI of the face from the grayscale image, resize it to a fixed 28x28 pixels, and then prepare
+                # the ROI for classification via the CNN
+                roi = gray[fY:fY + fH, fX:fX + fW]
+                roi = cv2.resize(roi, (64, 64))
+                roi = roi.astype("float") / 255.0
+                roi = img_to_array(roi)
+                roi = np.expand_dims(roi, axis=0)
 
-        for (i, (emotion, prob)) in enumerate(zip(EMOTIONS, preds)):
-            # construct the label text
-            text = "{}: {:.2f}%".format(emotion, prob * 100)
-
-            # draw the label + probability bar on the canvas
-            # emoji_face = feelings_faces[np.argmax(preds)]
-
-            w = int(prob * 300)
-            cv2.rectangle(canvas, (7, (i * 35) + 5),
-                          (w, (i * 35) + 35), (0, 0, 255), -1)
-            cv2.putText(canvas, text, (10, (i * 35) + 23),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45,
-                        (255, 255, 255), 1)
-            cv2.putText(frameClone, label, (fX, fY - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 1)
-            cv2.rectangle(frameClone, (fX, fY), (fX + fW, fY + fH),
-                          (0, 0, 255), 2)
-
-        # Display Results
-        cv2.imshow('your_face', frameClone)
-        cv2.imshow("Probabilities", canvas)
-
-        FaceingFalg = -1
-
-        if ret:
-            dect_face = detector(frame)
-            if dect_face:
-                FaceingFalg = 1  # Looking at camera
-                for x in dect_face:
-                    cv2.rectangle(frame, (x.left(), x.top()), (x.right(), x.bottom()), (0, 255, 0))
-                cv2.putText(frame, "Person is facing camera", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-                eyes = eye_cascade.detectMultiScale(frame, 1.3, 5)
-                for (x1, y1, w, h) in eyes:
-                    cv2.rectangle(frame, (x1, y1), (x1 + w, y1 + h), (0, 255, 0), 1)
+                preds = emotion_classifier.predict(roi)[0]
+                emotion_probability = np.max(preds)
+                label = EMOTIONS[preds.argmax()]
             else:
-                FaceingFalg = 0  # Not looking at camera
-                cv2.putText(frame, "Person is not facing camera", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            # cv2.imshow("demo", frame)
-        else:
-            print("Error in reading from camera")
+                continue
 
-        if detected:
-            globalFaceObj = {
-                "face_towards_camera": str(FaceingFalg),
-                "emotion": label,
-                "Euler angle": EulerStr,
-                "frameID" : processFrameID
-            }
-            print(globalFaceObj);
-            data.clear()
-        else:
-            print("no face")
-        cv2.waitKey(1)
+            for (i, (emotion, prob)) in enumerate(zip(EMOTIONS, preds)):
+                # construct the label text
+                text = "{}: {:.2f}%".format(emotion, prob * 100)
+
+                # draw the label + probability bar on the canvas
+                # emoji_face = feelings_faces[np.argmax(preds)]
+
+                w = int(prob * 300)
+                cv2.rectangle(canvas, (7, (i * 35) + 5),
+                              (w, (i * 35) + 35), (0, 0, 255), -1)
+                cv2.putText(canvas, text, (10, (i * 35) + 23),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45,
+                            (255, 255, 255), 1)
+                cv2.putText(frameClone, label, (fX, fY - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 1)
+                cv2.rectangle(frameClone, (fX, fY), (fX + fW, fY + fH),
+                              (0, 0, 255), 2)
+
+            # Display Results
+            cv2.imshow('your_face', frameClone)
+            cv2.imshow("Probabilities", canvas)
+
+            FaceingFalg = -1
+
+            if ret:
+                dect_face = detector(frame)
+                if dect_face:
+                    FaceingFalg = 1  # Looking at camera
+                    for x in dect_face:
+                        cv2.rectangle(frame, (x.left(), x.top()), (x.right(), x.bottom()), (0, 255, 0))
+                    cv2.putText(frame, "Person is facing camera", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                    eyes = eye_cascade.detectMultiScale(frame, 1.3, 5)
+                    for (x1, y1, w, h) in eyes:
+                        cv2.rectangle(frame, (x1, y1), (x1 + w, y1 + h), (0, 255, 0), 1)
+                else:
+                    FaceingFalg = 0  # Not looking at camera
+                    cv2.putText(frame, "Person is not facing camera", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                # cv2.imshow("demo", frame)
+            else:
+                print("Error in reading from camera")
+
+            if detected:
+                globalFaceObj = {
+                    "face_towards_camera": str(FaceingFalg),
+                    "emotion": label,
+                    "Euler angle": EulerStr,
+                    "frameID" : processFrameID
+                }
+                # print(globalFaceObj);
+                data.clear()
+            else:
+                print("no face")
+            cv2.waitKey(1)
     cv2.destroyAllWindows()
 
 
@@ -282,18 +284,17 @@ def calculate_scaled_dimension(scale, image):
     return dimension
 def scale_image(image, size):
     if image.size > 0:
-            image_resized_scaled = cv2.resize(
-                image,
-                calculate_scaled_dimension(
-                    size,
-                    image
-                ),
-                interpolation=cv2.INTER_AREA
+        image_resized_scaled = cv2.resize(
+            image,
+            calculate_scaled_dimension(
+                size,
+                image
+            ),
+            interpolation=cv2.INTER_AREA
 
-            )
-            return image_resized_scaled
+        )
+        return image_resized_scaled
 def detect_box(image, cropIt=True):
-
     # https://stackoverflow.com/questions/36982736/how-to-crop-biggest-rectangle-out-of-an-image/36988763
     # Transform colorspace to YUV
     image_yuv = cv2.cvtColor(image, cv2.COLOR_BGR2YUV)
@@ -302,11 +303,11 @@ def detect_box(image, cropIt=True):
 
     # Blur to filter high frequency noises
     image_blurred = cv2.GaussianBlur(image_y, (3, 3), 0)
-    #show_image(image_blurred, window_name)
+    # show_image(image_blurred, window_name)
 
     # Apply canny edge-detector
     edges = cv2.Canny(image_blurred, 100, 300, apertureSize=3)
-    #show_image(edges, window_name)
+    # show_image(edges, window_name)
 
     # Find extrem outer contours
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -327,13 +328,18 @@ def detect_box(image, cropIt=True):
             mx = x, y, w, h
             mx_area = area
 
-        #cv2.drawContours(image, [box], -1, (0, 255, 0), 3)
-        #show_image(image, window_name)
+        # cv2.drawContours(image, [box], -1, (0, 255, 0), 3)
+        # show_image(image, window_name)
 
     x, y, w, h = mx
 
-    roi=image[y:y+h,x:x+w]
-    return roi
+    roi = image[y:y + h, x:x + w]
+    if (roi.shape[1] == 0 or roi.shape[0] == 0):
+        print("Couldn't detect edges in image")
+        return 0
+
+    cv2.imwrite("cropped_img.jpeg", roi)
+    return 1
 def show_image(image, window_name):
     # Show image
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -347,7 +353,7 @@ def show_image(image, window_name):
 def resizeAndDisplayImage(image, scalePercent=10):
     dimensions = (int(image.shape[1] * scalePercent / 100), int(image.shape[0] * scalePercent / 100))
     resizedImage = cv.resize(image, dimensions, interpolation=cv.INTER_AREA)
-    #cv.imshow('Resized Image', resizedImage)
+    # cv.imshow('Resized Image', resizedImage)
 def remove_outliers(data, m=2.):
     d = np.abs(data - np.median(data))
     mdev = np.median(d)
@@ -363,11 +369,10 @@ def increase_contrast(filepath):
 def box_extraction(img_for_box_extraction_path, cropped_dir_path):
     img = cv2.imread(img_for_box_extraction_path, 0)  # Read the image
 
-
     (thresh, img_bin) = cv2.threshold(img, 128, 255,
                                       cv2.THRESH_BINARY | cv2.THRESH_OTSU)  # Thresholding the image
-    #img_bin = cv2.bitwise_not(img_bin)
-    #cv2.imshow()
+    # img_bin = cv2.bitwise_not(img_bin)
+    # cv2.imshow()
     img_bin = 255 - img_bin  # Invert the image
     cv2.imwrite("Image_bin.png", img_bin)
 
@@ -416,39 +421,38 @@ def box_extraction(img_for_box_extraction_path, cropped_dir_path):
             y, x, h, w = cv2.boundingRect(c)
             hor = 0
 
-        #print(w,h)
+        # print(w,h)
         # If the box height is greater then 20, width is >80, then only save it as a box in "cropped/" folder.
         if (w > 40 and h > 4) and w > (2 * h):  ##10 1, 2 2, 485 4
 
             idx += 1
-            if(hor):
+            if (hor):
                 new_img = img[y:y + h, x:x + w]
             else:
                 new_img = img[x:x + w, y:y + h]
 
             width.append(w)
             height.append(h)
-            #cv2.imshow('image', new_img)
-            #cv2.waitKey(0)
-
+            # cv2.imshow('image', new_img)
+            # cv2.waitKey(0)
 
     if idx > 0:
         data_points_w = np.asarray(width)
         data_points_h = np.asarray(height)
-        if(count > 5):
+        if (count > 5):
             remove_outliers(data_points_w, 2.)
         else:
             remove_outliers(data_points_w, 1.)
         remove_outliers(data_points_h, 1.)
 
-        if(data_points_w.size >= 5 and data_points_h.size >= 5):
-            print("Document is in correct format")
+        if (data_points_w.size >= 5 and data_points_h.size >= 5):
+            # print("Document is in correct format")
             return 1
         else:
-            b = 0
+            sqwsw = 0
             # print("Detected format is incorrect")
     else:
-        b = 0
+        sqwsw = 0
         # print("Detected format is incorrect")
 def contour_detection(filePath):
     img = cv.imread(filePath, 0)
@@ -483,19 +487,19 @@ def contour_detection(filePath):
 
             rect = cv.boundingRect(cnt)
             img = cv.drawContours(imgRGB, [approx], 0, (0, 0, 255), 2)
-            #cv.imshow("image",img)
-            #cv.waitKey(0)
+            # cv.imshow("image",img)
+            # cv.waitKey(0)
             FieldDimensions.append(rect)
             count += 1
-            #print(len(approx))
+            # print(len(approx))
             if len(approx) == 4:
                 field += 1
     if num == 11:
-        print("Document is in correct format")
+        # print("Document is in correct format")
         detected = 1
-        #print(detected)
+        # print(detected)
 
-    #print(num)
+    # print(num)
     cv.imwrite("contours.jpeg", img)
     return detected
 def ocrThread():
@@ -530,28 +534,29 @@ def ocrThread():
                     # _____________________________CROP IMAGE______________________________________
                     image = cv2.imread(filename)
                     image = scale_image(image, size_max_image)
-                    image = detect_box(image, True)
-                    cv2.imwrite("cropped_img.jpeg", image)
+                    vu = detect_box(image, True)
 
-                    # _____________________________ENHANCE______________________________________
+                    if vu == 1:
+                        image = "cropped_img.jpeg"
+                        # _____________________________ENHANCE______________________________________
 
-                    filename = increase_contrast("cropped_img.jpeg")
+                        filename = increase_contrast("cropped_img.jpeg")
 
-                    # _____________________________CROP IMAGE______________________________________
-                    image = cv2.imread(filename)
-                    image = scale_image(image, size_max_image)
-                    image = detect_box(image, True)
-                    cv2.imwrite("enhanced_img.png", image)
+                        # _____________________________CROP IMAGE______________________________________
+                        image = cv2.imread(filename)
+                        image = scale_image(image, size_max_image)
+                        detect_box(image, True)
+                        # cv2.imwrite("enhanced_img.png",image)
 
-                    # _____________________________CONTOUR DETECTION______________________________________
-                    filePath = 'enhanced_img.png'
-                    detected = contour_detection(filePath)
+                        # _____________________________CONTOUR DETECTION______________________________________
+                        filePath = 'cropped_img.jpeg'
+                        detected = contour_detection(filePath)
 
-                    # _____________________________BOX DETECTION______________________________________
+                        # _____________________________BOX DETECTION______________________________________
 
-                    if detected == 0:
-                        val = box_extraction("contours.jpeg", "./Cropped/")
-                    image_path = "enhanced_img.png"
+                        if detected == 0:
+                            val = box_extraction("contours.jpeg", "./Cropped/")
+                        image_path = "cropped_img.jpeg"
 
 
                 else:
@@ -559,6 +564,7 @@ def ocrThread():
                     flag = 0
 
                 if val == 1 or detected == 1:
+
                     # Add your Computer Vision subscription key and endpoint to your environment variables.
                     if 'COMPUTER_VISION_ENDPOINT' in os.environ:
                         endpoint = os.environ['COMPUTER_VISION_ENDPOINT']
@@ -582,7 +588,7 @@ def ocrThread():
 
                     t = time.localtime()
                     current_time = time.strftime("%H:%M:%S", t)
-                    print("detected valid form at" + str(current_time))
+                    # print(current_time)
 
                     ocr_url = endpoint + "/vision/v3.0-preview/read/analyze"
                     # Set the langauge that you want to recognize. The value can be "en" for English, and "es" for Spanish
@@ -602,7 +608,6 @@ def ocrThread():
 
                     # The recognized text isn't immediately available, so poll to wait for completion.
                     analysis = {}
-                    print("waiting for azure response")
                     poll = True
                     while (poll):
                         response_final = requests.get(
@@ -612,22 +617,19 @@ def ocrThread():
                         # print(json.dumps(analysis, indent=4))
 
                         time.sleep(1)
-                        if "analyzeResult" in analysis:
+                        if ("analyzeResult" in analysis):
                             poll = False
-                        if "status" in analysis and analysis['status'] == 'failed':
+                        if ("status" in analysis and analysis['status'] == 'failed'):
                             poll = False
-
-                    print("Got results at " + str(current_time))
 
                     polygons = []
-                    if "analyzeResult" in analysis:
+                    if ("analyzeResult" in analysis):
                         # Extract the recognized text, with bounding boxes.
                         polygons = [(line["boundingBox"], line["text"])
                                     for line in analysis["analyzeResult"]["readResults"][0]["lines"]]
                     t1 = time.localtime()
                     current_time1 = time.strftime("%H:%M:%S", t1)
-                    print("got api result at ", end="")
-                    print(current_time1)
+                    # print(current_time1)
                     # Display the image and overlay it with the extracted text.
                     i = 0
                     size = 30
@@ -643,8 +645,6 @@ def ocrThread():
                         ax.axes.add_patch(patch)
                         # plt.text(vertices[0][0], vertices[0][1], text, fontsize=20, va="top")
 
-                    input = []
-
                     if (text[0] == "COURSE DROP FORM"):
                         flag = 1
                     if (text[0].upper() == "COURSE CODE"):
@@ -658,9 +658,10 @@ def ocrThread():
                         text[8 + flag]: text[9 + flag],
                         "Detection Time": current_time
                     }
-                    newOcrResults = True
-                    print(student_data)
-                    formData = deepcopy(student_data)
+                    if len(student_data) == 6:
+                        newOcrResults = True
+                        print(student_data)
+                        formData = deepcopy(student_data)
         except:
             # e = sys.exc_info()[0]
             # print(e)
@@ -669,6 +670,42 @@ def ocrThread():
 
 
 #gesture stuff
+def getRelativeDirection(old, new, distanceRef, ls = False):
+    if ls:
+        sens = 2
+    else:
+        sens = 5
+
+    if distance(old, new) > sens:
+        a = calculateAngle(old, new)
+        # print("distance: " + str(distance(old, new)))
+        # print(a)
+        if -45 < a < 45:
+            return 1
+        if a < -135 or a > 135:
+            return 2
+        if -135 < a < -45:
+            return 3
+        if 45 < a < 135:
+            return 4
+    return -1
+def detectGuesture(s):
+    parsed = []
+    for i in range(1, 29):
+        if s[i] == s[i + 1]:
+            n = 0
+        elif s[i] != s[i + 1] and s[i] == s[i - 1]:
+            parsed.append(s[i])
+    stt = (str(parsed).replace(', ', ''))
+    if '21212' in stt or '12121' in stt:
+        return('UD')
+    if '34343' in stt or '43434' in stt:
+        return('LR')
+
+    return "none"
+
+
+
 class circularlist(object):
     def __init__(self, size, data = []):
         """Initialization"""
@@ -694,6 +731,10 @@ class circularlist(object):
     def __repr__(self):
         """Return string representation"""
         return self._data.__repr__() + ' (' + str(len(self._data))+' items)'
+    def __contains__(self, key):
+        return key in self._data
+    def potentialGesture(self):
+        return -1 not in self._data and -2 not in self._data
 def calculateAngle(x, y):
     if x[0] == 0 or x[1] == 0 or y[1] == 0 or y[0] == 0:
         return -1000
@@ -786,8 +827,12 @@ def azure_keypoint_detection():
     referenceExists = False
     frameLimbLength = [0 for x in range(8)]
 
-    noseTrack = circularlist(15, [1])
+    noseTrack = circularlist(15, [-2 for j in range(15)])
+    rightHandTrack = circularlist(15, [-2 for j in range(30)])
+    leftHandTrack = circularlist(15, [-2 for j in range(30)])
+
     coords = [[0, 0] for x in range(25)]
+    lastCoords = [[0, 0] for x in range(25)]
 
     print("Waiting for connection from openpose@azure")
     mySocket.listen(1)
@@ -827,7 +872,7 @@ def azure_keypoint_detection():
             #update global face coords variable
             face_coords[0] = (int(coords[0][0]) - 540) / 540
             face_coords[1] = (int(coords[0][1]) - 540) / 540
-
+            #
             pygame.draw.line(DISPLAY, (155, 155, 0), coords[8], coords[1], 1)
             torsoAngle = calculateAngle(coords[1], coords[8])
             if printAngles: print("Torso angle: " + str(torsoAngle))
@@ -947,11 +992,43 @@ def azure_keypoint_detection():
             # print(obj)
 
 
+            #compute torso length
+            #use this to normalize everything
+            spineLength = distance(coords[1], coords[8])
+
+            #check if neck moves more than noise -> kill all patterns
+            if distance(coords[1], lastCoords[1]) > 20:
+                noseTrack = circularlist(15, [-2 for j in range(15)])
+                leftHandTrack = circularlist(15, [-2 for j in range(30)])
+                rightHandTrack = circularlist(15, [-2 for j in range(30)])
+            else:
+                noseTrack.append(getRelativeDirection(lastCoords[1], coords[1], spineLength, True))
+                leftHandTrack.append(getRelativeDirection(lastCoords[7], coords[7], spineLength))
+                rightHandTrack.append(getRelativeDirection(lastCoords[4], coords[4], spineLength))
+
+            if noseTrack.potentialGesture():
+                for j in range(15):
+                    print(noseTrack[j], end = " ")
+                print(" : NOSE")
+
+            if leftHandTrack.potentialGesture():
+                for j in range(30):
+                    print(leftHandTrack[j], end = " ")
+                print(" : LH")
+                print(detectGuesture(leftHandTrack))
+
+            if rightHandTrack.potentialGesture():
+                for j in range(30):
+                    print(rightHandTrack[j], end = " ")
+                print(" : RH")
+                print(detectGuesture(rightHandTrack))
+
+            lastCoords = deepcopy(coords)
             pygame.display.update()
             pygame.time.wait(1)
             DISPLAY.fill((0, 0, 0))
 
-    conn.close()
+    # conn.close()
 
 
 #blender/nlp stuff
@@ -1047,6 +1124,7 @@ def getEmotionString(str):
         return "posture, I feel angry."
 
 def communicate():
+
     global blenderConnected
     global NLPConnected
     global newOcrResults
@@ -1057,6 +1135,9 @@ def communicate():
     lastSentState = 2
     sentPersonInFrame = False
     lastNLPSendTime = 0
+    lastFormSendTime = 0
+    formRetries = 3
+    lastSentGesture = -1
     while not blenderConnected or not NLPConnected:
         time.sleep(0.2)
 
@@ -1077,7 +1158,6 @@ def communicate():
                     sentPersonInFrame = True
 
         elif sentPersonInFrame:
-
             if lastSentState != 2 and not personInFrame:
                 print("sending no person in frame (2)")
                 lastSentState = 2
@@ -1091,32 +1171,42 @@ def communicate():
 
             #check if form data is present
             checkData = deepcopy(formData)
-            if type(checkData) is dict:
-                print("checking if valid")
-                if len(checkData) == 6 and 'COURSE CODE' in checkData and 'ROLL NUMBER' in checkData:
-                    print("sending valid form data (5)")
-                    user_input = "form, my roll number is {0} and course Id is {1}"\
-                        .format(checkData['ROLL NUMBER'], checkData['COURSE CODE'])
-                    nlp_client.sendall(bytes('cv_input', 'UTF-8'))
-                    nlp_client.sendall(bytes(user_input, 'UTF-8'))
-                    lastNLPSendTime = time.time()
+            if newOcrResults:
+                print("new ocr")
+                # if len(checkData) == 6 and 'COURSE CODE' in checkData and 'ROLL NUMBER' in checkData and time.time() - lastFormSendTime > 10 :
+                print("sending valid form data (5)")
+                # user_input = "form, my roll number is {0} and course Id is {1}"\
+                #     .format(checkData['ROLL NUMBER'], checkData['COURSE CODE'])
+                user_input = "form, my roll number is 17L-4125 and course Id is CS 549"
 
-                    lastSentState = 5
-                    user_input = "5"
-                    blender_client.sendall(bytes('update_state', 'UTF-8'))
-                    blender_client.sendall(int(user_input).to_bytes(1, byteorder='big'))
-                    blender_client.recv(1)
+                nlp_client.sendall(bytes('cv_input', 'UTF-8'))
+                nlp_client.sendall(bytes(user_input, 'UTF-8'))
+                print(nlp_client.recv(1))
+                lastNLPSendTime = time.time()
 
-                elif len(checkData) == 6:
-                    print("sending invalid form state (6)")
-                    lastSentState = 6
-                    user_input = "6"
-                    blender_client.sendall(bytes('update_state', 'UTF-8'))
-                    blender_client.sendall(int(user_input).to_bytes(1, byteorder='big'))
-                    blender_client.recv(1)
-                formData = None
+                lastSentState = 5
+                user_input = "5"
+                blender_client.sendall(bytes('update_state', 'UTF-8'))
+                blender_client.sendall(int(user_input).to_bytes(1, byteorder='big'))
+                blender_client.recv(1)
+                lastFormSendTime = time.time()
+                newOcrResults = False
 
-            # #randomly send face expressions
+                # elif len(checkData) == 6 and time.time() - lastFormSendTime > 10 :
+                #     if formRetries > 0:
+                #         formRetries -= 1
+                #     else:
+                #         print("sending invalid form state (6)")
+                #         lastSentState = 6
+                #         user_input = "6"
+                #         blender_client.sendall(bytes('update_state', 'UTF-8'))
+                #         blender_client.sendall(int(user_input).to_bytes(1, byteorder='big'))
+                #         blender_client.recv(1)
+                #         formRetries = 3
+                #         lastFormSendTime = time.time()
+                # newOcrResults = False
+
+            #randomly send face expressions
             # if time.time() - lastNLPSendTime > 10 and frame_ID - globalFaceObj['frameID'] < 20:
             #     print("sending face expression")
             #     user_input = getEmotionString(globalFaceObj['emotion'])
@@ -1130,12 +1220,14 @@ def communicate():
                 user_input = "posture, I feel tired."
                 nlp_client.sendall(bytes('cv_input', 'UTF-8'))
                 nlp_client.sendall(bytes(user_input, 'UTF-8'))
+                print(nlp_client.recv(1))
                 lastNLPSendTime = time.time()
-            #
-            # if not gestureGlobal['upper body upright']:
+
+            # if time.time() - lastNLPSendTime > 3  and not gestureGlobal['upper body upright']:
             #     user_input = "posture, I don't think I want to talk to you."
             #     nlp_client.sendall(bytes('cv_input', 'UTF-8'))
             #     nlp_client.sendall(bytes(user_input, 'UTF-8'))
+            #     print(nlp_client.recv(1))
             #     lastNLPSendTime = time.time()
 
             if time.time() - lastNLPSendTime > 3 and not gestureGlobal['facing front']:
@@ -1143,54 +1235,44 @@ def communicate():
                 user_input = "posture, I don't think I want to talk to you."
                 nlp_client.sendall(bytes('cv_input', 'UTF-8'))
                 nlp_client.sendall(bytes(user_input, 'UTF-8'))
+                print(nlp_client.recv(1))
                 lastNLPSendTime = time.time()
 
-        # user_input = input("input nlp or blender \n")
-        # if user_input == 'nlp':
-        #     user_input = input("Enter the information that you wish to send")
-        #     nlp_client.sendall(bytes('cv_input', 'UTF-8'))
-        #     nlp_client.sendall(bytes(user_input, 'UTF-8'))
-        # elif user_input =='blender':
-        #     user_input  = input("Enter the state ")
-        #     blender_client.sendall(bytes('update_state', 'UTF-8'))
-        #     blender_client.sendall(int(user_input).to_bytes(2, byteorder='big'))
-        # else:
-        #     print('Wrong input ')
 
 
 if __name__ == '__main__':
-    # server = threading.Thread(target=init_server_blender_nlp, args=())
-    # server.start()
-    # server.join()
-    #
-    # server2 = threading.Thread(target=init_server_face_coords, args=())
-    # server2.start()
-    # server2.join()
-    #
-    # # start ipcamera reader
-    # camera_thread = threading.Thread(target=fetchFrame, args=())
-    # camera_thread.start()
-    # time.sleep(2)
-    #
-    #
-    # #start ocr
-    # ocr = threading.Thread(target=ocrThread, args=())
-    # ocr.start()
+    server = threading.Thread(target=init_server_blender_nlp, args=())
+    server.start()
+    server.join()
 
-    # #start face emotion
-    # face = threading.Thread(target=faceThread, args=())
-    # face.start()
+    server2 = threading.Thread(target=init_server_face_coords, args=())
+    server2.start()
+    server2.join()
+
+    # start ipcamera reader
+    camera_thread = threading.Thread(target=fetchFrame, args=())
+    camera_thread.start()
+    time.sleep(2)
+
+    #start ocr
+    ocr = threading.Thread(target=ocrThread, args=())
+    ocr.start()
+    #
+
+    #start face emotion
+    face = threading.Thread(target=faceThread, args=())
+    face.start()
 
     #start gesture recognition
     azure_datareader = threading.Thread(target=azure_keypoint_detection, args=())
     azure_datareader.start()
 
-    # #start blender/nlp thread
-    #
-    # networking = threading.Thread(target=communicate, args=())
-    # networking.start()
-    #
-    # # setup face coord threads
-    # coords_send = threading.Thread(target=send_face_coords, args=())
-    # coords_send.start()
-    #
+    #start blender/nlp thread
+
+    networking = threading.Thread(target=communicate, args=())
+    networking.start()
+
+    # setup face coord threads
+    coords_send = threading.Thread(target=send_face_coords, args=())
+    coords_send.start()
+
